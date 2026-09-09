@@ -62,43 +62,101 @@ async def build_queue(
 ) -> int:
     """Henter data, vurderer sager og tilføjer kandidater til køen.
 
-    Returns:
-        Antallet af items, der blev tilføjet til køen.
+    Output:
+        Returnerer antallet af items, der blev tilføjet til køen.
+
+    Loggen viser blandt andet:
+        - Antal sager hentet fra Acadre.
+        - Antal datalinjer læst fra SD CSV-filen.
+        - Antal CPR/stamafdeling-nøgler i SD-indekset.
+        - Antal kandidater til køen.
     """
-    # Første browserkørsel: Acadre.
+    logger.info("Queue builder startet.")
+
+    # --------------------------------------------------------
+    # 1. Hent sager fra Acadre
+    # --------------------------------------------------------
     acadre_sager = await _fetch_acadre_cases(
         debug=debug,
         headless=headless,
     )
 
-    # Anden browserkørsel: SD.
+    logger.info(
+        "DATASTATUS | Acadre-sager hentet: %s",
+        len(acadre_sager),
+    )
+
+    # --------------------------------------------------------
+    # 2. Download medarbejderlisten fra SD
+    # --------------------------------------------------------
     sd_csv_path = await _download_sd_employee_list(
         debug=debug,
         headless=headless,
     )
 
-    # SD-filen læses og struktureres.
+    # --------------------------------------------------------
+    # 3. Læs og strukturér SD CSV-filen
+    # --------------------------------------------------------
     sd_data = read_sd_employee_list(
         file_path=sd_csv_path,
         minimum_data_rows=SD_MINIMUM_DATA_ROWS,
     )
 
-    # Acadre-sagerne vurderes mod SD-indekset.
+    logger.info(
+        "DATASTATUS | SD-datalinjer læst fra CSV: %s",
+        sd_data["row_count"],
+    )
+
+    logger.info(
+        "DATASTATUS | Unikke CPR/stamafdeling-nøgler i SD: %s",
+        len(sd_data["index"]),
+    )
+
+    logger.info(
+        "DATASTATUS | SD-fil: %s",
+        sd_data["file_path"],
+    )
+
+    logger.info(
+        "DATASTATUS | SD-filens tegnsæt: %s",
+        sd_data["encoding"],
+    )
+
+    # --------------------------------------------------------
+    # 4. Sammenlign Acadre med SD
+    # --------------------------------------------------------
     queue_candidates = find_acadre_sager_til_queue(
         acadre_sager=acadre_sager,
         sd_index=sd_data["index"],
         lukkefrist_dage=LUKKEFRIST_DAGE,
     )
 
-    # Kandidaterne tilføjes til Automation Server-køen.
+    logger.info(
+        "DATASTATUS | Sager klar til kø: %s",
+        len(queue_candidates),
+    )
+
+    # --------------------------------------------------------
+    # 5. Tilføj kandidater til køen
+    # --------------------------------------------------------
     _add_candidates_to_queue(
         workqueue=workqueue,
         queue_candidates=queue_candidates,
     )
 
     logger.info(
-        "Queue builder afsluttet. "
-        "%s items blev tilføjet.",
+        "DATASTATUS | Acadre-sager: %s | "
+        "SD-datalinjer: %s | "
+        "SD-indeksnøgler: %s | "
+        "Kø-items: %s",
+        len(acadre_sager),
+        sd_data["row_count"],
+        len(sd_data["index"]),
+        len(queue_candidates),
+    )
+
+    logger.info(
+        "Queue builder afsluttet. %s items blev tilføjet.",
         len(queue_candidates),
     )
 

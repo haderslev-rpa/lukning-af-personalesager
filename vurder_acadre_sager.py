@@ -64,7 +64,7 @@ def find_acadre_sager_til_queue(
     lukkefrist_dage: int,
     dags_dato: date | None = None,
 ) -> list[dict[str, Any]]:
-    """Vurdér alle Acadre-sager mod SD-indekset.
+    """Vurderer alle Acadre-sager mod SD-indekset.
 
     Args:
         acadre_sager:
@@ -89,11 +89,15 @@ def find_acadre_sager_til_queue(
 
             {
                 "reference": "07/17720",
-                "box": {...}
+                "box": {...},
             }
+
+        Sager, der ikke skal i køen, tælles i resultatfordelingen,
+        men logges ikke enkeltvis.
     """
     current_date = (
-        dags_dato or date.today()
+        dags_dato
+        or date.today()
     )
 
     candidates: list[
@@ -104,6 +108,15 @@ def find_acadre_sager_til_queue(
         str,
         int,
     ] = {}
+
+    total_cases = len(
+        acadre_sager
+    )
+
+    logger.info(
+        "Starter vurdering af %s Acadre-sager.",
+        total_cases,
+    )
 
     for acadre_case in acadre_sager:
         evaluation = _evaluate_case(
@@ -118,7 +131,11 @@ def find_acadre_sager_til_queue(
         ]
 
         result_counts[result] = (
-            result_counts.get(result, 0) + 1
+            result_counts.get(
+                result,
+                0,
+            )
+            + 1
         )
 
         if evaluation["skal_i_queue"]:
@@ -131,15 +148,19 @@ def find_acadre_sager_til_queue(
                 "box": evaluation["box"],
             })
 
-        else:
-            logger.info(
-                "Acadre-sag %s springes over: %s",
-                evaluation.get(
-                    "acadre_sag",
-                    "<ukendt>",
-                ),
-                result,
-            )
+    logger.info(
+        "Vurdering af Acadre-sager afsluttet."
+    )
+
+    logger.info(
+        "Antal vurderede Acadre-sager: %s",
+        total_cases,
+    )
+
+    logger.info(
+        "Antal sager klar til kø: %s",
+        len(candidates),
+    )
 
     logger.info(
         "Resultatfordeling: %s",
